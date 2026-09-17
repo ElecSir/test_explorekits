@@ -1,0 +1,22 @@
+# Python 3.11 (общее правило команды №2)
+numpy>=1.24
+pandas>=2.0
+scikit-learn>=1.3
+scipy>=1.10
+PyYAML>=6.0
+
+# разработка
+pytest>=7.4
+nbformat>=5.9
+nbconvert>=7.0
+ipykernel>=6.25
+ruff>=0.4
+black>=24.0
+
+# опционально: сверка с эталонной реализацией Open Bandit Pipeline.
+# obp тянет torch как жёсткую зависимость, хотя numpy-путь его не использует —
+# см. заглушку в experiments/_obp_crosscheck.py. Если obp не установлен,
+# тесты сверки пропускаются, остальное работает.
+# obp>=0.4.1
+# mypy_extensions
+# tqdm

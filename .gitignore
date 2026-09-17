@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Open Bandit Dataset в Git не кладём (правило участника 4, задача 4)
+data/obd/
