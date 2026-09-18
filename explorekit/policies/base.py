@@ -71,5 +71,10 @@ class BasePolicy(ABC):
         ...
 
     @abstractmethod
-    def update(self, decision: Decision, reward: float) -> None:
+    def update(
+        self,
+        decision: Decision,
+        reward: float,
+        context: np.ndarray | None = None,
+    ) -> None:
         ...

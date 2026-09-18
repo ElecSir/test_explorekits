@@ -1,0 +1,43 @@
+# Конфиг политик ExploreKit. (Участник 1).
+
+seed: 42
+
+# Какая политика активна сейчас. Меняешь это поле — меняется политика,
+# код не трогаем.
+active_policy: linucb
+
+# Определения всех политик.
+# Ключ секции (epsilon_greedy / linucb / thompson) — это имя,
+# которое используется в active_policy. Внутри — type (имя класса в реестре)
+# и параметры конструктора.
+policies:
+  epsilon_greedy:
+    type: epsilon_greedy
+    n_actions: 80
+    epsilon: 0.10
+    whitelist: null
+    blacklist: null
+
+  smoke_epsilon_greedy:
+    type: epsilon_greedy
+    n_actions: 5
+    epsilon: 1.0
+    seed: 0
+
+  linucb:
+    type: linucb
+    n_actions: 80
+    context_dim: 3
+    alpha: 1.0
+    temperature: 1.0
+    reg: 1.0
+    whitelist: null
+    blacklist: null
+
+  # Заглушка — заполнишь после реализации Thompson Sampling
+  thompson:
+    type: thompson
+    n_actions: 80
+    context_dim: 3
+    mc_samples: 200
+    temperature: 1.0

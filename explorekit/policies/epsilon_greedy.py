@@ -99,5 +99,10 @@ class EpsilonGreedyPolicy(BasePolicy):
             policy_name=self.name,
         )
 
-    def update(self, decision: Decision, reward: float) -> None:
+    def update(
+        self,
+        decision: Decision,
+        reward: float,
+        context: np.ndarray | None = None,
+    ) -> None:
         return None
