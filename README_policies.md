@@ -27,19 +27,23 @@ jupyter notebook notebooks/ope_policies.ipynb
 
 ```python
 from explorekit.policies import (
+    # Базовый контракт
     BasePolicy, Decision,
+    # Политики
     EpsilonGreedyPolicy, LinUCBPolicy, ThompsonSamplingPolicy,
-    load_policies_config, build_policy, build_active_policy,
+    # Загрузка конфига и фабрика
+    load_policies_config,
+    build_policy, build_policy_by_name, build_active_policy,
 )
 ```
 
-Типовое использование:
+Типовое использование — **через фабрику** (не создаём классы напрямую):
 
 ```python
 from explorekit.policies import load_policies_config, build_active_policy
 
-cfg = load_policies_config()                       # читает configs/policies.yaml
-policy = build_active_policy(cfg)                  # собирает политику по active_policy
+cfg = load_policies_config()                # читает configs/policies.yaml
+policy = build_active_policy(cfg)           # берёт политику из active_policy
 
 # батчевый режим (для OPE)
 dist = policy.action_distribution(context, base_scores)
@@ -51,6 +55,32 @@ print(decision.chosen_item, decision.propensity, decision.is_exploration)
 
 # обновление после reward
 policy.update(decision, reward=1.0, context=context)
+```
+
+Три способа собрать политику:
+
+```python
+from explorekit.policies import (
+    build_active_policy,        # 1. по active_policy из YAML
+    build_policy_by_name,       # 2. по имени секции
+    build_policy,               # 3. по готовому spec (dict)
+    load_policies_config,
+)
+
+cfg = load_policies_config()
+
+# 1. Боевой пайплайн: клиент меняет active_policy в YAML — меняется политика
+policy = build_active_policy(cfg)
+
+# 2. Несколько политик для сравнения
+policies = {
+    name: build_policy_by_name(name, cfg)
+    for name in ["epsilon_greedy", "linucb", "thompson"]
+}
+
+# 3. Программная сборка из dict (не из YAML)
+spec = {"type": "linucb", "n_actions": 80, "context_dim": 3, "alpha": 1.0}
+policy = build_policy(spec, default_seed=42)
 ```
 
 ## Контракт с остальными модулями
@@ -116,6 +146,22 @@ UCB-скоров. Параметры **разделены**:
 параметров, доля побед действия. Это **то же распределение**, из которого
 делается выбор — иначе `propensity = 0` при малых `K`.
 
+**Фабрика политик** (`explorekit/policies/__init__.py`) — реестр типов и
+сборка политик из YAML. Три функции:
+
+- `build_policy(spec, default_seed)` — сборка из готового dict (секция YAML);
+- `build_policy_by_name(name, cfg)` — сборка по имени секции из конфига;
+- `build_active_policy(cfg)` — сборка политики, помеченной в YAML как
+  `active_policy`.
+
+Реестр `_POLICY_REGISTRY` сопоставляет строку `type` из YAML с классом:
+`"linucb"` → `LinUCBPolicy`. Добавить новую политику = одна строка в реестре.
+
+Фабрика **наследует глобальный seed**: если в секции политики `seed` не
+задан, берётся `cfg["seed"]`. Это позволяет иметь единый seed для всего
+эксперимента и точечные override только там, где это нужно (например,
+smoke-политики с фиксированным `seed: 0`).
+
 **Конфигурируемость** (`config.py`) — все параметры в `configs/policies.yaml`:
 тип политики, `epsilon`, `alpha`, `temperature`, `ope_temperature`, `reg`,
 `mc_samples`, `min/max_epsilon`, `exploration_subset`, seed. Один глобальный
@@ -130,8 +176,9 @@ seed, политики наследуют; отдельный seed только 
 | `test_epsilon_greedy.py` | 16 | сумма = 1, неотрицательность, propensity = probs[chosen], clip, subset, fallback |
 | `test_linucb.py` | 12 | UCB-формула, update A/b, softmax, ope_temperature изолирован |
 | `test_thompson.py` | 10 | Cholesky-сэмплирование, MC-propensity, сходимость в полном цикле |
+| `test_policies_factory.py` | 5 | сборка из YAML, `active_policy`, наследование seed, обработка ошибок |
 
-Итого: **38 тестов**, `pytest tests/test_epsilon_greedy.py tests/test_linucb.py tests/test_thompson.py -v` — зелёный.
+Итого: **43 теста**, `pytest tests/test_epsilon_greedy.py tests/test_linucb.py tests/test_thompson.py tests/test_policies_factory.py -v` — зелёный.
 
 ### Smoke-тесты (интеграция с OPE)
 
