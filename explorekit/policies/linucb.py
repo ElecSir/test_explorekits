@@ -29,6 +29,7 @@ class LinUCBPolicy(BasePolicy):
         context_dim: int,
         alpha: float = 1.0,
         temperature: float = 1.0,
+        ope_temperature: float | None = None,
         reg: float = 1.0,
         seed: int | None = None,
         whitelist: np.ndarray | None = None,
@@ -41,21 +42,24 @@ class LinUCBPolicy(BasePolicy):
             raise ValueError("alpha must be >= 0")
         if temperature <= 0:
             raise ValueError("temperature must be > 0")
+        if ope_temperature is not None and ope_temperature <= 0:
+            raise ValueError("ope_temperature must be > 0")
         if reg <= 0:
             raise ValueError("reg must be > 0")
 
         self.context_dim = int(context_dim)
         self.alpha = float(alpha)
-        self.temperature = float(temperature)
+        self.temperature = float(temperature)                                # для выбора
+        self.ope_temperature = (                                             # для OPE
+            float(ope_temperature) if ope_temperature is not None
+            else float(temperature)
+        )
         self.reg = float(reg)
         self.whitelist = whitelist
         self.blacklist = blacklist
 
-        # Состояние: A[a] = reg * I, b[a] = 0
         self.A = np.stack([reg * np.eye(self.context_dim) for _ in range(self.n_actions)])
         self.b = np.zeros((self.n_actions, self.context_dim))
-
-        # Последний контекст (для update без явной передачи context)
         self._last_context: np.ndarray | None = None
 
     # ---------------- helpers ----------------
@@ -110,8 +114,9 @@ class LinUCBPolicy(BasePolicy):
             scores[:, a] = mean + bonus
         return scores
 
-    def _softmax(self, scores: np.ndarray) -> np.ndarray:
-        z = scores / self.temperature
+    @staticmethod
+    def _softmax(scores: np.ndarray, temperature: float) -> np.ndarray:
+        z = scores / temperature
         z = z - z.max(axis=-1, keepdims=True)
         e = np.exp(z)
         return e / e.sum(axis=-1, keepdims=True)
@@ -124,18 +129,22 @@ class LinUCBPolicy(BasePolicy):
         base_scores: np.ndarray,
         candidate_items: np.ndarray | None = None,
     ) -> np.ndarray:
+        """OPE-friendly распределение (использует ope_temperature).
+
+        Используется как evaluation_action_dist в build_ope_input.
+        При ope_temperature > temperature даёт более гладкие вероятности,
+        что улучшает ESS и стабилизирует веса.
+        """
         single_round = context.ndim == 1
-        x = context[None, :] if single_round else context       # (n, d)
+        x = context[None, :] if single_round else context
 
-        ucb = self._ucb_scores(x)                                # (n, A)
-
-        # маскирование кандидатов: -inf для не-кандидатов
-        allowed = self._allowed_mask(candidate_items)            # (A,)
+        ucb = self._ucb_scores(x)
+        allowed = self._allowed_mask(candidate_items)
         if not allowed.any():
             raise ValueError("No allowed candidates for this policy")
         ucb = np.where(allowed[None, :], ucb, -np.inf)
 
-        dist = self._softmax(ucb)                                # (n, A)
+        dist = self._softmax(ucb, self.ope_temperature)
         return dist[0] if single_round else dist
 
     def select_action(
@@ -144,23 +153,36 @@ class LinUCBPolicy(BasePolicy):
         base_scores: np.ndarray,
         candidate_items: np.ndarray | None = None,
     ) -> Decision:
-        dist = self.action_distribution(context, base_scores, candidate_items)
+        """Выбирает действие с self.temperature (как политика действует).
 
-        # запоминаем контекст для update без явного context
+        Decision.propensity и Decision.probabilities отражают РЕАЛЬНОЕ
+        распределение выбора (self.temperature), а не OPE-распределение
+        (self.ope_temperature). Это делает логи честными.
+        """
         self._last_context = np.array(context, copy=True)
 
-        chosen = int(self.rng.choice(self.n_actions, p=dist))
+        x = np.asarray(context, dtype=float).reshape(-1)
+        if x.shape[0] != self.context_dim:
+            raise ValueError(
+                f"context has dim {x.shape[0]}, policy expects {self.context_dim}"
+            )
 
-        # определение exploration: выбранное действие != argmax UCB среди кандидатов
         allowed = self._allowed_mask(candidate_items)
-        ucb = self._ucb_scores(context[None, :] if context.ndim == 1 else context)
-        ucb_masked = np.where(allowed[None, :], ucb, -np.inf)
-        greedy = int(np.argmax(ucb_masked, axis=1)[0])
+        if not allowed.any():
+            raise ValueError("No allowed candidates for this policy")
+
+        ucb = self._ucb_scores(x[None, :])[0]
+        ucb_masked = np.where(allowed, ucb, -np.inf)
+
+        select_dist = self._softmax(ucb_masked, self.temperature)
+        chosen = int(self.rng.choice(self.n_actions, p=select_dist))
+
+        greedy = int(np.argmax(ucb_masked))
 
         return Decision(
             chosen_item=chosen,
-            propensity=float(dist[chosen]),
-            probabilities=dist,
+            propensity=float(select_dist[chosen]),
+            probabilities=select_dist,
             is_exploration=(chosen != greedy),
             policy_name=self.name,
         )

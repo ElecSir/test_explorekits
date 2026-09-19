@@ -141,3 +141,52 @@ def test_propensity_matches_probabilities(policy):
     d = policy.select_action(x, scores)
     assert np.isclose(d.propensity, d.probabilities[d.chosen_item])
     assert d.propensity > 0
+
+
+def test_ope_temperature_only_affects_action_distribution():
+    """temperature влияет на выбор, ope_temperature — только на
+    action_distribution (для OPE).
+
+    Важно: чтобы softmax давал разные распределения при разных
+    температурах, скоры должны различаться. У свежей политики все
+    скоры равны, поэтому сначала "учим" разные награды на разные
+    действия.
+    """
+    policy = LinUCBPolicy(
+        N_ACTIONS, D,
+        alpha=0.0,
+        temperature=0.1,          # жёсткий выбор
+        ope_temperature=10.0,     # очень гладкий OPE
+        reg=1.0, seed=0,
+    )
+    x = np.ones(D)
+    probs_uniform = np.ones(N_ACTIONS) / N_ACTIONS
+
+    # "Учим": action=2 получает reward=1, остальные — reward=0
+    for _ in range(20):
+        for a in range(N_ACTIONS):
+            r = 1.0 if a == 2 else 0.0
+            d = Decision(a, float(probs_uniform[a]), probs_uniform, False)
+            policy.update(d, reward=r, context=x)
+
+    # Теперь у action=2 скор больше, softmax не uniform
+    dist = policy.action_distribution(x, np.zeros(N_ACTIONS))
+    assert dist.min() > 0.05, f"OPE-распределение должно быть гладким, dist={dist}"
+    assert dist.max() < 0.5, f"OPE-распределение должно быть гладким, dist={dist}"
+    assert dist.argmax() == 2, f"action=2 должен доминировать, dist={dist}"
+
+    # select_action использует temperature=0.1 → почти one-hot
+    d = policy.select_action(x, np.zeros(N_ACTIONS))
+    assert d.probabilities.max() > 0.9, \
+        f"выбор должен быть резким, probs={d.probabilities}"
+    assert np.isclose(d.propensity, d.probabilities[d.chosen_item])
+
+
+def test_ope_temperature_defaults_to_temperature():
+    p = LinUCBPolicy(N_ACTIONS, D, temperature=2.0, seed=0)
+    assert p.ope_temperature == 2.0
+
+
+def test_invalid_ope_temperature_raises():
+    with pytest.raises(ValueError, match="ope_temperature"):
+        LinUCBPolicy(N_ACTIONS, D, ope_temperature=0.0)
