@@ -52,7 +52,7 @@ rng = np.random.default_rng(0)
 
 # Истинные θ* для каждого действия (d-мерные)
 true_theta = np.zeros((n_actions, context_dim))
-true_theta[2] = np.array([1.0, 1.0, 1.0])   # action 2 — лучший
+true_theta[2] = 1.0   # скаляр растянется на любую context_dim   # action 2 — лучший
 for a in range(n_actions):
     if a != 2:
         true_theta[a] = rng.normal(scale=0.1, size=context_dim)
@@ -129,7 +129,8 @@ print(f"eval_dist: shape={eval_dist.shape}, "
 
 # ---------- 5. Стыковка с OPE ----------
 # Синтетические логи с uniform behavior
-true_ctr = np.array([0.4, 0.2, 0.3, 0.1, 0.35])
+true_ctr = 0.1 + 0.1 * rng.random(n_actions)
+true_ctr[2] = 0.4
 behavior_pscore = np.full(n_rounds, 1.0 / n_actions)
 logged_actions = rng.integers(0, n_actions, size=n_rounds)
 reward = rng.binomial(1, true_ctr[logged_actions]).astype(float)
