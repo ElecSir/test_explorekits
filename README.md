@@ -156,7 +156,7 @@ seed 42, ε = 0.10) дал bias около +0.001 и CI coverage 100% у IPS, SN
 DR. В `configs/ope.yaml` заложен полный чек на 50 репликаций × 5000 раундов;
 эти 50×5000 в отчёт не подставлялись.
 
-Open Bandit Dataset в репозиторий не входит и в этом чекауте не прогонялся.
+Open Bandit Dataset в репозиторий не входит.
 Загрузчик — `explorekit/datasets/open_bandit.py`, эксперимент —
 `experiments/open_bandit.py`. Скачать опубликованные CSV:
 
