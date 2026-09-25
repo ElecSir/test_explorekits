@@ -236,6 +236,24 @@ CTR cost в п.п. Speedup на этих пресетах 1.28–1.91x, не 4x.
 python experiments/plot_zone3.py
 ```
 
+### Прогон на Open Bandit Dataset
+
+Датасет: 1,374,327 показов, 80 действий, CTR логирующей
+политики 0.347% (4,768 кликов).
+
+| policy | ε | IPS | SNIPS | DR | ESS/N | status |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| conservative | 0.05 | 0.085% | 0.352% | 0.351% | 1.4% | Unreliable |
+| moderate | 0.10 | 0.102% | 0.351% | 0.351% | 1.6% | Unreliable |
+| aggressive | 0.25 | 0.153% | 0.350% | 0.350% | 2.2% | Unreliable |
+
+IPS-оценки ненадёжны (ESS/N = 1.4–2.2%, max weight 60–76, обрезано 1.3%) —
+следствие крайне низкого CTR (0.347%) и слабого перекрытия политик.
+SNIPS и DR дают стабильные оценки ~0.35%, но не различают политики:
+reward model на `LogisticRegression` не улавливает различия между
+айтемами при таком CTR. Диагностика корректно помечает все оценки как
+`Unreliable` — это ожидаемое поведение OPE при малом перекрытии.
+
 ## ExperimentResult и dashboard
 
 Каждый run фиксирует logging/evaluation policy, N, seed, True CTR,
